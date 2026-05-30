@@ -9,38 +9,35 @@ import requests
 from serpapi import GoogleSearch
 import pdfplumber
 from dateutil.parser import parse
-import torch
-from transformers import BertTokenizer, BertModel
+from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import spacy
 
 # -------------------------------
 # Configuration
 # -------------------------------
-JOB_TIMEOUT_SECONDS = 12          # per‑job timeout
+JOB_TIMEOUT_SECONDS = 12
 time_24_hours_ago = datetime.now() - timedelta(days=1)
 formatted_time = time_24_hours_ago.strftime('%Y-%m-%d')
 
 # Temporary storage for fetched jobs
 job_listings_temp = []
 
-# Load BERT
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-model = BertModel.from_pretrained('bert-base-uncased')
+# Load lightweight embedding model (80 MB)
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Load spaCy (download model if not present)
+# Load spaCy with minimal components to save memory
 try:
-    nlp = spacy.load("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm", disable=["parser", "tagger"])
 except OSError:
     os.system("python -m spacy download en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm", disable=["parser", "tagger"])
 
-# Flask app
 app = Flask(__name__)
-CORS(app)  # not strictly needed when frontend is served from same origin, but harmless
+CORS(app)
 
 # -------------------------------
-# Helper functions (unchanged from your original)
+# Helper functions
 # -------------------------------
 def extract_text_from_pdf(pdf_file):
     try:
@@ -90,10 +87,8 @@ def format_posting_date(posting_time):
         return "Unknown date"
 
 def get_bert_embeddings(text):
-    inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True, max_length=512)
-    with torch.no_grad():
-        outputs = model(**inputs)
-    return outputs.last_hidden_state.mean(dim=1)
+    # sentence-transformers returns numpy array
+    return model.encode(text)
 
 def extract_skills_from_text_with_ai(text):
     doc = nlp(text)
@@ -109,7 +104,8 @@ def generate_ai_explanation(resume_text, job_description, resume_embeddings=None
     if resume_embeddings is None:
         resume_embeddings = get_bert_embeddings(resume_text)
     job_embeddings = get_bert_embeddings(job_description)
-    similarity_score = cosine_similarity(resume_embeddings.numpy(), job_embeddings.numpy())[0][0]
+    # cosine_similarity expects 2D arrays
+    similarity_score = cosine_similarity([resume_embeddings], [job_embeddings])[0][0]
     job_skills = extract_skills_from_text_with_ai(job_description)
     resume_skills = extract_skills_from_text_with_ai(resume_text)
     explanation = f"The job description matches your resume with a similarity score of {similarity_score:.2f}. "
@@ -125,7 +121,7 @@ def _process_single_job(job, resume_text, resume_embeddings=None, req_timeout=8)
     job_description = fetch_job_description(link, req_timeout=req_timeout)
     if not job_description:
         return {"name": name, "link": link, "explanation": f"SKIPPED: failed to fetch job description.", "posted_date": posted_date, "score": 0.0}
-    if "too many jobs to parse" in job_description:
+    if "too many jobs to parse" in job_description.lower():
         return {"name": name, "link": link, "explanation": f"SKIPPED: multiple jobs on page.", "posted_date": posted_date, "score": 0.0}
     job_description_trimmed = job_description[:3000]
     explanation = generate_ai_explanation(resume_text, job_description_trimmed, resume_embeddings=resume_embeddings)
@@ -144,6 +140,10 @@ def _process_single_job(job, resume_text, resume_embeddings=None, req_timeout=8)
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    return "OK", 200
 
 @app.route('/fetch_jobs', methods=['POST'])
 def fetch_jobs():
@@ -225,4 +225,4 @@ def process_resume():
     return jsonify(sorted_top_jobs)
 
 if __name__ == "__main__":
-    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
