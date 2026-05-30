@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoleRadar.ai</title>
     <style>
-        /* Your original styling – unchanged */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Fira Code', monospace; background-color: #0d0d0d; color: #e0e0e0; display:flex; justify-content:center; align-items:center; min-height:100vh; overflow:hidden; }
         .container { width: 90%; max-width:800px; padding:40px; text-align:center; background-color:#1e1e1e; border-radius:8px; box-shadow: 0 0 20px #6200ea, 0 0 40px #6200ea; animation: neon-border 2s infinite alternate; }
@@ -28,8 +27,8 @@
         #loading { color: #bb86fc; animation: flicker 1.5s infinite alternate; }
         @keyframes flicker { 0% { opacity: 0.6; } 100% { opacity: 1; } }
         #error-message { color: #cf6679; }
-        .toast { position: fixed; top: 20px; right: 20px; background-color: #333; color: #fff; padding: 10px 20px; border-radius: 4px; display: none; }
-        #progress-modal { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; justify-content:center; align-items:center; }
+        .toast { position: fixed; top: 20px; right: 20px; background-color: #333; color: #fff; padding: 10px 20px; border-radius: 4px; display: none; z-index:1000; }
+        #progress-modal { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; justify-content:center; align-items:center; z-index:1001; }
         #progress-modal .modal-content { background:#1e1e1e; padding:20px; border-radius:4px; box-shadow: 0 0 15px #00ffcc; }
         @media (max-width:768px) {
             h1 { font-size:2rem; }
@@ -44,7 +43,6 @@
         <h3>AI-curated remote jobs, for what you do the best.</h3>
         <sub><em>Let AI find the jobs you’ll actually like (and get).</em></sub>
 
-        <!-- Step 2: Enter Designation -->
         <div id="designation-step">
             <div class="input-group">
                 <label for="designation">Enter Your Designation:</label>
@@ -53,10 +51,8 @@
             <button type="submit" id="find-jobs-button">Find Jobs</button>
         </div>
 
-        <!-- Step 3: Loading -->
-        <div id="loading">AI is finding the jobs best for you...</div>
+        <div id="loading" style="display:none;">AI is finding the jobs best for you...</div>
 
-        <!-- Step 4: Job Results -->
         <div id="job-results" style="display: none;">
             <h2>Today's Job Listings:</h2>
             <ul id="job-list"></ul>
@@ -68,14 +64,10 @@
             <button id="go-back-button" style="display: none;">Go Back</button>
         </div>
 
-        <!-- Step 6: Error Message -->
         <div id="error-message" style="display: none;">No jobs found or something went wrong. Please try again.</div>
     </div>
 
-    <!-- Toast Notifications -->
     <div id="toast" class="toast"></div>
-
-    <!-- Progress Modal -->
     <div id="progress-modal">
         <div class="modal-content">
             <p>AI is curating the best jobs for you...</p>
@@ -83,7 +75,6 @@
     </div>
 
     <script>
-        // No BASE_URL – use relative paths
         const findJobsButton = document.getElementById("find-jobs-button");
         const designationInput = document.getElementById("designation");
         const loadingIndicator = document.getElementById("loading");
@@ -100,14 +91,12 @@
         jobResults.style.display = "none";
         errorMessage.style.display = "none";
 
-        // Helper: show toast
         function showToast(message, duration = 3000) {
             toast.textContent = message;
             toast.style.display = 'block';
             setTimeout(() => { toast.style.display = 'none'; }, duration);
         }
 
-        // Helper: extract score from explanation text
         function extractScoreFromExplanation(explanation) {
             const match = explanation.match(/similarity score of (\d+\.\d+)/);
             if (match) {
@@ -117,7 +106,6 @@
             return null;
         }
 
-        // 1) Fetch jobs by designation
         async function fetchJobs(designation) {
             try {
                 loadingIndicator.style.display = "block";
@@ -133,9 +121,7 @@
                     body: formData,
                 });
 
-                if (!response.ok) {
-                    throw new Error("Failed to fetch jobs.");
-                }
+                if (!response.ok) throw new Error("Failed to fetch jobs.");
 
                 const data = await response.json();
                 const allJobs = data || [];
@@ -166,7 +152,6 @@
             }
         }
 
-        // 2) Upload resume & get scored jobs
         async function handleResumeUpload() {
             const resumeFile = document.getElementById("resume").files[0];
             if (!resumeFile) {
@@ -185,9 +170,7 @@
                     body: formData,
                 });
 
-                if (!response.ok) {
-                    throw new Error("Failed to process resume.");
-                }
+                if (!response.ok) throw new Error("Failed to process resume.");
 
                 const topJobData = await response.json();
                 progressModal.style.display = "none";
@@ -199,11 +182,7 @@
                 updatedJobs.forEach((job) => {
                     const score = extractScoreFromExplanation(job.explanation);
                     const jobItem = document.createElement("li");
-
-                    if ((job.explanation || "").startsWith("SKIPPED:")) {
-                        skippedCount++;
-                    }
-
+                    if ((job.explanation || "").startsWith("SKIPPED:")) skippedCount++;
                     jobItem.innerHTML = `
                         <a href="${job.link}" target="_blank">${job.name}</a>
                         <p>Score: ${score !== null ? score + "/10" : "Score not available"}</p>
@@ -223,14 +202,10 @@
             }
         }
 
-        // Event listeners
         findJobsButton.addEventListener("click", () => {
             const designation = designationInput.value.trim();
-            if (designation) {
-                fetchJobs(designation);
-            } else {
-                alert("Please enter a designation.");
-            }
+            if (designation) fetchJobs(designation);
+            else alert("Please enter a designation.");
         });
 
         uploadResumeButton.addEventListener("click", handleResumeUpload);
